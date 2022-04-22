@@ -22,7 +22,7 @@ It is not an ORM, main purpose is to have tables DDL as a source of truth. DDL c
 ## Usage
 
 ```shell
-$ target/debug/pg2rs --help
+$ pg2rs --help
 pg2rs 0.0.1
 Stanislav Panasik <spanasik@gmail.com>
 Make Rust entities from PostgreSQL schema
