@@ -16,7 +16,7 @@ let users: Vec<User> = result.into_iter().map(|row| User::from(row)).collect();
 println!("{:#?}", users);
 ```
 
-It is not an ORM, main purpose is to have tables DDL as a source of true. DDL can be generated using some tool like [Alembic](https://alembic.sqlalchemy.org/en/latest/), and then pg2rs is used to reflect changes in your `structs.rs`
+It is not an ORM, main purpose is to have tables DDL as a source of truth. DDL can be generated using some tool like [Alembic](https://alembic.sqlalchemy.org/en/latest/), and then pg2rs is used to reflect changes in your `structs.rs`
 
 
 ## Usage
