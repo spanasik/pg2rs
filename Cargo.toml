@@ -1,0 +1,16 @@
+[package]
+authors = ["Stanislav Panasik <spanasik@gmail.com>"]
+description = "Make Rust entities from PostgreSQL schema"
+name = "pg2rs"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+clap = { version = "3.1.1", features = ["cargo", "derive", "env"] }
+convert_case = "0.1.0"
+futures = "0.3.21"
+inflection = "0.1.2"
+log = "0.4"
+pretty_env_logger = "0.4.0"
+tokio = { version = "1.17.0", features = ["full"] }
+tokio-postgres = "0.7.5"
