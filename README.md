@@ -23,7 +23,7 @@ It is not an ORM, main purpose is to have tables DDL as a source of truth. DDL c
 
 ```shell
 $ pg2rs --help
-pg2rs 0.0.1
+pg2rs 0.0.2
 Stanislav Panasik <spanasik@gmail.com>
 Make Rust entities from PostgreSQL schema
 
@@ -73,7 +73,7 @@ OPTIONS:
 
     -w, --postgres_crate <postgres_crate>
             Postgres crate [env: POSTGRES_CRATE=] [default: postgres] [possible values: postgres,
-            tokio_postgres]
+            sqlx, tokio_postgres]
 
     -z, --singularize-table-names
             [env: SINGULARIZE_TABLE_NAMES=]

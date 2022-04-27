@@ -9,6 +9,10 @@ use std::io::{Write as IoWrite};
 use std::sync::{Arc};
 use tokio_postgres::{NoTls, Error};
 
+const CRATE_POSTGRES: &str = "postgres";
+const CRATE_SQLX: &str = "sqlx";
+const CRATE_TOKIO_POSTGRES: &str = "tokio_postgres";
+
 extern crate pretty_env_logger;
 #[macro_use] extern crate log;
 
@@ -85,7 +89,7 @@ async fn main() -> Result<(), Error> {
             .short('w')
             .takes_value(true)
             .default_value("postgres")
-            .possible_values(&["postgres", "tokio_postgres"])
+            .possible_values(&[CRATE_POSTGRES, CRATE_SQLX, CRATE_TOKIO_POSTGRES])
             .env("POSTGRES_CRATE")
             .help("Postgres crate"))
         .arg(Arg::new("singularize-table-names")
@@ -254,8 +258,14 @@ async fn main() -> Result<(), Error> {
         writeln!(output, "use std::str::FromStr;").unwrap();
     }
 
-    writeln!(output, "use {}::row::Row;", postgres_crate).unwrap();
-    writeln!(output, "use {}::types::{{ToSql, FromSql}};", postgres_crate).unwrap();
+    match postgres_crate {
+        CRATE_POSTGRES | CRATE_TOKIO_POSTGRES => {
+            writeln!(output, "use {}::row::Row;", postgres_crate).unwrap();
+            writeln!(output, "use {}::types::{{ToSql, FromSql}};", postgres_crate).unwrap();
+        },
+        CRATE_SQLX => {},
+        _ => {}
+    }
 
     if use_chrono_crate {
         writeln!(output).unwrap();
@@ -268,8 +278,8 @@ async fn main() -> Result<(), Error> {
         writeln!(output, "use rust_decimal::Decimal;").unwrap();
     }
     
-    process_enums(&enums_data, &mut output);
-    process_tables_data(&tables_data, &mut output);
+    process_enums(postgres_crate, &enums_data, &mut output);
+    process_tables_data(postgres_crate, &tables_data, &mut output);
 
     if output_file.is_empty() {
         print!("{}", output);
@@ -297,15 +307,32 @@ fn type_str_transform_case<'a>(nullable: &'a str, type_name: &'a str, case: Case
     }
 }
 
-fn process_enums(enums_data: &BTreeMap<String, Vec<String>>, output: &mut String) {
+fn process_enums(postgres_crate: &str, enums_data: &BTreeMap<String, Vec<String>>, output: &mut String) {
     for (enum_name, variants) in enums_data {
         writeln!(output).unwrap();
-        writeln!(output, "#[derive(Debug, ToSql, FromSql)]").unwrap();
-        writeln!(output, "#[postgres(name = \"{}\")]", enum_name).unwrap();
+        match postgres_crate {
+            CRATE_POSTGRES | CRATE_TOKIO_POSTGRES => {
+                writeln!(output, "#[derive(Debug, ToSql, FromSql)]").unwrap();
+                writeln!(output, "#[postgres(name = \"{}\")]", enum_name).unwrap();
+            },
+            CRATE_SQLX => {
+                writeln!(output, "#[derive(Debug, sqlx::Type)]").unwrap();
+                writeln!(output, "#[sqlx(type_name = \"{}\")]", enum_name).unwrap();
+            },
+            _ => {}
+        }
         let enum_name = enum_name.to_case(Case::UpperCamel);
         writeln!(output, "pub enum {} {{", enum_name).unwrap();
         for variant in variants {
-            writeln!(output, "#[postgres(name = \"{}\")]", variant).unwrap();
+            match postgres_crate {
+                CRATE_POSTGRES | CRATE_TOKIO_POSTGRES => {
+                    writeln!(output, "    #[postgres(name = \"{}\")]", variant).unwrap();
+                },
+                CRATE_SQLX => {
+                    writeln!(output, "    #[sqlx(rename = \"{}\")]", variant).unwrap();
+                },
+                _ => {}
+            }
             writeln!(output, "    {},", variant.to_case(Case::UpperCamel)).unwrap();
         }
         writeln!(output, "}}").unwrap();
@@ -326,30 +353,48 @@ fn process_enums(enums_data: &BTreeMap<String, Vec<String>>, output: &mut String
     }
 }
 
-fn process_tables_data(tables_data: &BTreeMap<String, Vec<ColumnProperties>>, output: &mut String) {
+fn process_tables_data(postgres_crate: &str, tables_data: &BTreeMap<String, Vec<ColumnProperties>>, output: &mut String) {
     for (table_name, columns_properties) in tables_data {
         writeln!(output).unwrap();
-        writeln!(output, "#[derive(Debug, ToSql, FromSql)]").unwrap();
+        match postgres_crate {
+            CRATE_POSTGRES | CRATE_TOKIO_POSTGRES => {
+                writeln!(output, "#[derive(Debug, ToSql, FromSql)]").unwrap();
+            },
+            CRATE_SQLX => {
+                writeln!(output, "#[derive(Debug, sqlx::FromRow)]").unwrap();
+            },
+            _ => {}
+        }
         writeln!(output, "pub struct {} {{", table_name).unwrap();
         for column in columns_properties {
+            let column_name_snake_case = column.name.to_case(Case::Snake);
+            if postgres_crate == CRATE_SQLX && column_name_snake_case != column.name {
+                writeln!(output, "    #[sqlx(rename = \"{}\")]", column.name).unwrap();
+            }
             writeln!(output,
                 "    pub {}: {},",
                 column.name.to_case(Case::Snake), column.rust_type
             ).unwrap();
         }
         writeln!(output, "}}").unwrap();
-        writeln!(output).unwrap();
-        writeln!(output, "impl From<Row> for {} {{", table_name).unwrap();
-        writeln!(output, "    fn from(row: Row) -> Self {{").unwrap();
-        writeln!(output, "        Self {{").unwrap();
-        for column in columns_properties {
-            writeln!(output,
-                "            {}: row.get(\"{}\"),",
-                column.name.to_case(Case::Snake), column.name
-            ).unwrap();
+        match postgres_crate {
+            CRATE_POSTGRES | CRATE_TOKIO_POSTGRES => {
+                writeln!(output).unwrap();
+                writeln!(output, "impl From<Row> for {} {{", table_name).unwrap();
+                writeln!(output, "    fn from(row: Row) -> Self {{").unwrap();
+                writeln!(output, "        Self {{").unwrap();
+                for column in columns_properties {
+                    writeln!(output,
+                        "            {}: row.get(\"{}\"),",
+                        column.name.to_case(Case::Snake), column.name
+                    ).unwrap();
+                }
+                writeln!(output, "        }}").unwrap();
+                writeln!(output, "    }}").unwrap();
+                writeln!(output, "}}").unwrap();
+            },
+            CRATE_SQLX => {},
+            _ => {}
         }
-        writeln!(output, "        }}").unwrap();
-        writeln!(output, "    }}").unwrap();
-        writeln!(output, "}}").unwrap();
     }
 }
